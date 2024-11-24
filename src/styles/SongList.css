@@ -1,0 +1,37 @@
+h1 {
+  text-align: center;
+  font-family: Arial, sans-serif;
+  color: #333;
+}
+
+h2 {
+  color: #555;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+li {
+  margin: 10px 0;
+}
+
+audio {
+  width: 100%;
+  max-width: 600px;
+}
+
+p {
+  margin: 5px 0;
+  font-weight: bold;
+}
