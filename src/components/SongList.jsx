@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
-import ReactAudioPlayer from "react-h5-audio-player";
-import "react-h5-audio-player/lib/styles.css"; // Import default styles
-import { parseBuffer } from "music-metadata"; // Import from the new library
+import ReactJkMusicPlayer from "react-jinke-music-player";
+import "react-jinke-music-player/assets/index.css";
 import "../styles/SongList.css";
+import * as mm from "music-metadata";
 
 const SongList = () => {
-  const [albums, setAlbums] = useState([]);
-  const [currentSong, setCurrentSong] = useState(null); // For selected song
-  const [currentAlbumArt, setCurrentAlbumArt] = useState(null); // For album art
-  const [currentSongTitle, setCurrentSongTitle] = useState(""); // For song title
+  const [playlist, setPlaylist] = useState([]); // Initial playlist
+  const [currentIndex, setCurrentIndex] = useState(0); // Current track index
+  const albumArtCache = {}; // Cache for album art
 
+  // Fetch the list of songs from Google Cloud Storage on mount
   useEffect(() => {
     const fetchSongs = async () => {
       try {
@@ -17,115 +17,91 @@ const SongList = () => {
           "https://storage.googleapis.com/storage/v1/b/michoel-streicher-songs/o"
         );
         const data = await response.json();
-        const files = data.items;
-        const groupedAlbums = {};
 
-        // Group files by album folder
-        files.forEach((file) => {
+        // Map songs to playlist format
+        const parsedSongs = data.items.map((file) => {
           const [album, song] = file.name.split("/");
-          if (!groupedAlbums[album]) {
-            groupedAlbums[album] = { songs: [] };
-          }
-          groupedAlbums[album].songs.push(song);
+          return {
+            name: song,
+            singer: album,
+            musicSrc: `https://storage.googleapis.com/michoel-streicher-songs/${encodeURIComponent(
+              album
+            )}/${encodeURIComponent(song)}`,
+            cover: "https://via.placeholder.com/150", // Default placeholder
+          };
         });
 
-        // Convert to an array of album objects
-        const albumList = Object.keys(groupedAlbums).map((album) => ({
-          name: album,
-          songs: groupedAlbums[album].songs.filter(Boolean), // Remove undefined entries
-        }));
-
-        setAlbums(albumList);
+        setPlaylist(parsedSongs);
       } catch (error) {
-        console.error("Error fetching songs:", error);
+        console.error("Error fetching song list:", error);
       }
     };
 
     fetchSongs();
   }, []);
 
-  // Handles song selection
-  const handleSongSelect = async (album, song) => {
-    const songUrl = `https://storage.googleapis.com/michoel-streicher-songs/${encodeURIComponent(
-      album.name
-    )}/${encodeURIComponent(song)}`;
-    setCurrentSong(songUrl);
-    setCurrentSongTitle(song);
-  
-    // Extract album art from MP3 file
+  // Fetch album art from the MP3 metadata
+  const fetchAlbumArt = async (songUrl) => {
+    if (albumArtCache[songUrl]) {
+      return albumArtCache[songUrl]; // Return cached art
+    }
+
     try {
       const response = await fetch(songUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      const metadata = await parseBuffer(new Uint8Array(arrayBuffer), { mimeType: "audio/mpeg" });
-      
-      console.log("Metadata:", metadata); // Log metadata to check for album art
-  
+      const blob = await response.blob();
+      const metadata = await mm.parseBlob(blob);
       const picture = metadata.common.picture?.[0];
-  
+
       if (picture) {
-        const blob = new Blob([picture.data], { type: picture.format });
-        const url = URL.createObjectURL(blob);
-        setCurrentAlbumArt(url);
-      } else {
-        console.warn("No album art found in metadata.");
-        setCurrentAlbumArt(null);
+        const base64String = btoa(
+          String.fromCharCode(...new Uint8Array(picture.data))
+        );
+        const albumArt = `data:${picture.format};base64,${base64String}`;
+        albumArtCache[songUrl] = albumArt; // Cache it
+        return albumArt;
       }
     } catch (error) {
-      console.error("Error extracting album art:", error);
-      setCurrentAlbumArt(null);
+      console.error("Error fetching album art:", error);
     }
+
+    return "https://via.placeholder.com/150"; // Default cover
   };
-  
+
+  const handleAudioPlay = async (audioInfo) => {
+    const { musicSrc } = audioInfo;
+
+    // Fetch the album art for the current song
+    const albumArt = await fetchAlbumArt(musicSrc);
+
+    // Update the playlist with the fetched album art
+    setPlaylist((prevPlaylist) =>
+      prevPlaylist.map((track) =>
+        track.musicSrc === musicSrc ? { ...track, cover: albumArt } : track
+      )
+    );
+  };
+
+  const handleAudioPlayTrackChange = async (currentPlayIndex, audioInfo) => {
+    setCurrentIndex(currentPlayIndex);
+    await handleAudioPlay(audioInfo); // Ensure album art updates on track change
+  };
 
   return (
     <div>
       <h1>Michoel Streicher Collection</h1>
-
-      {/* Centralized Audio Player */}
-      <ReactAudioPlayer
-        src={currentSong}
-        autoPlay
-        controls
-        style={{ width: "100%", marginBottom: "20px" }}
-        header={
-          currentSong && (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {currentAlbumArt && (
-                <img
-                  src={currentAlbumArt}
-                  alt="Album Art"
-                  style={{
-                    width: "50px",
-                    height: "50px",
-                    marginRight: "10px",
-                    borderRadius: "4px",
-                  }}
-                />
-              )}
-              <p style={{ margin: 0 }}>{currentSongTitle}</p>
-            </div>
-          )
-        }
+      <ReactJkMusicPlayer
+        audioLists={playlist}
+        mode="full"
+        theme="light"
+        autoPlay={false}
+        onAudioPlay={handleAudioPlay}
+        onAudioPlayTrackChange={handleAudioPlayTrackChange}
+        showDownload={false}
+        defaultPlayIndex={0}
+        showMediaSession={true}
+        glassBg={true}
+        clearPriorAudioLists={false} // Retain the playlist when updated
       />
-
-      {/* Album and Song List */}
-      {albums.map((album, index) => (
-        <div key={index}>
-          <h2>{album.name}</h2>
-          <ul>
-            {album.songs.map((song, idx) => (
-              <li key={idx}>
-                <button
-                  onClick={() => handleSongSelect(album, song)}
-                  style={{ cursor: "pointer" }}
-                >
-                  {song}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
     </div>
   );
 };
