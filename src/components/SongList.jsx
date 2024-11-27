@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import AudioPlayer from "react-h5-audio-player";
 import "react-h5-audio-player/lib/styles.css";
-import * as mm from "music-metadata";
+import { parseBlob } from "music-metadata";
 
 const SongList = () => {
   const [albums, setAlbums] = useState([]); // Albums with songs
@@ -18,7 +18,7 @@ const SongList = () => {
     try {
       const response = await fetch(songUrl);
       const blob = await response.blob();
-      const metadata = await mm.parseBlob(blob);
+      const metadata = await parseBlob(blob);
       const picture = metadata.common.picture?.[0];
 
       if (picture) {
