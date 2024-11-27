@@ -20,7 +20,9 @@ dist-ssr
 
 # Google Cloud credentials or sensitive keys
 service-account-key.json
+# Exclude all JSON files except package.json
 *.json
+!package.json
 
 # Editor directories and files
 .vscode/*
